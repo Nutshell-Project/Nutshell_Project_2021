@@ -7,8 +7,12 @@
 #include "global.h"
 #include <unistd.h>
 
-char *getcwd(char *buf, size_t size);
+extern char *getcwd(char *buf, size_t size);
 int yyparse();
+int aliasIndex, varIndex;
+char cwd[PATH_MAX];
+struct evTable varTable;
+
 
 int main()
 {
@@ -30,10 +34,14 @@ int main()
     strcpy(varTable.word[varIndex], ".:/bin");
     varIndex++;
 
+
+
     system("clear");
     while(1)
     {
         printf("[%s]>> ", varTable.word[2]);
+        //printf("%s\n", getcwd(cwd, sizeof(cwd)));
+
         yyparse();
     }
 
