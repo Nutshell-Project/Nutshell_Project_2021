@@ -9,9 +9,12 @@
 #include <iostream>
 #include <string>
 #include "global.h"
+#include <sys/types.h>
+#include <pwd.h>
 
 int yylex(void);
 int yyerror(char *s);
+int runCD_home();
 int runCD(char* arg);
 int runSetAlias(char *name, char *word);
 int runSetEnv(char* arg1, char* arg2);
@@ -26,36 +29,67 @@ std::unordered_map<std::string,std::string> aliases;
 %union {char *string;}
 
 %start cmd_line
-%token <string> BYE CD STRING ALIAS UNALIAS END SETENV
+%token <string> BYE CD STRING ALIAS UNALIAS END SETENV UNSETENV COMMAND
 
 %%
 cmd_line    :
-	BYE END 		                {exit(1); return 1;}
-	| CD STRING END        			{runCD($2); return 1;}
+	BYE END					{exit(1); return 1;}
+	| CD END				{runCD_home(); return 1;}
+	| CD STRING END				{runCD($2); return 1;}
 	| ALIAS STRING STRING END		{runSetAlias($2, $3); return 1;}
-	| ALIAS END						{runPrintAlias(); return 1;}
+	| ALIAS END				{runPrintAlias(); return 1;}
 	| UNALIAS STRING END			{runUnalias($2); return 1;}
 	| SETENV STRING STRING END		{runSetEnv($2, $3); return 1;}
+	| UNSETENV STRING END			{return 1;}
+	| COMMAND END				{return 1;}
+	| COMMAND STRING END			{return 1;}
 
 %%
 
 int yyerror(char *s) {
-  printf("%s\n",s);
-  return 0;
-  }
+	printf("%s\n",s);
+	return 0;
+}
+
+int runCD_home(){
+	struct passwd *pw = getpwuid(getuid());
+	if(chdir(pw->pw_dir) == 0){
+		getcwd(cwd, sizeof(cwd));
+		strcpy(varTable.word[0], cwd);
+	}
+	return 1;
+}
 
 int runCD(char* arg) {
 
 	if (arg[0] != '/') { // arg is relative path
-		strcat(varTable.word[0], "/");
-		strcat(varTable.word[0], arg);
+		//Check if first char is '~'
+		if(arg[0] == '~')
+		{
+			//Do something to replace part of path with user's home. 
+			if (runCD_home())
+			{
+				//printf("SUCCESS\n");
+				std::string str(arg);
+				str = str.substr(2);
+				strcat(varTable.word[0], "/");
+				strcat(varTable.word[0], str.c_str());
+			}
+		}
+		
+		if(arg[0] != '~')
+		{
+			strcat(varTable.word[0], "/");
+			strcat(varTable.word[0], arg);
+		}
 
 		if(chdir(varTable.word[0]) == 0) {
+			getcwd(cwd, sizeof(cwd));
+			strcpy(varTable.word[0], cwd);
 			return 1;
 		}
 		else {
 			getcwd(cwd, sizeof(cwd));
-			
 			strcpy(varTable.word[0], cwd);
 			printf("Directory not found\n");
 			return 1;
@@ -68,25 +102,25 @@ int runCD(char* arg) {
 		}
 		else {
 			printf("Directory not found\n");
-                       	return 1;
+			return 1;
 		}
 	}
 }
 
 int runSetAlias(char *name, char *word) {
 	// for (int i = 0; i < aliasIndex; i++) {
-	// 	if(strcmp(name, word) == 0){
-	// 		printf("Error, expansion of \"%s\" would create a loop.\n", name);
-	// 		return 1;
-	// 	}
-	// 	else if((strcmp(aliasTable.name[i], name) == 0) && (strcmp(aliasTable.word[i], word) == 0)){
-	// 		printf("Error, expansion of \"%s\" would create a loop.\n", name);
-	// 		return 1;
-	// 	}
-	// 	else if(strcmp(aliasTable.name[i], name) == 0) {
-	// 		strcpy(aliasTable.word[i], word);
-	// 		return 1;
-	// 	}
+	//	if(strcmp(name, word) == 0){
+	//		printf("Error, expansion of \"%s\" would create a loop.\n", name);
+	//		return 1;
+	//	}
+	//	else if((strcmp(aliasTable.name[i], name) == 0) && (strcmp(aliasTable.word[i], word) == 0)){
+	//		printf("Error, expansion of \"%s\" would create a loop.\n", name);
+	//		return 1;
+	//	}
+	//	else if(strcmp(aliasTable.name[i], name) == 0) {
+	//		strcpy(aliasTable.word[i], word);
+	//		return 1;
+	//	}
 	// }
 	//strcpy(aliasTable.name[aliasIndex], name);
 	//strcpy(aliasTable.word[aliasIndex], word);
@@ -113,7 +147,7 @@ void runPrintAlias(void)
 	}
 	// for (int i = 0; i < aliasIndex; i++)
 	// {
-	// 	printf("Alias name: %s; Alias word: %s\n", aliasTable.name[i], aliasTable.word[i]);
+	//	printf("Alias name: %s; Alias word: %s\n", aliasTable.name[i], aliasTable.word[i]);
 	// }
 	for (auto& it : aliases)
 	{

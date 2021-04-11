@@ -39,7 +39,7 @@ int main()
     system("clear");
     while(1)
     {
-        printf("[%s]>> ", varTable.word[2]);
+        printf("[%s~%s]>> ", varTable.word[2], varTable.word[0]);
         //printf("%s\n", getcwd(cwd, sizeof(cwd)));
 
         yyparse();
