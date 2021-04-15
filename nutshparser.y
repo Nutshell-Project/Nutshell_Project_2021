@@ -5,12 +5,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
-#include <iostream>
 #include <string>
+#include <iostream>
+#include <string.h>
 #include "global.h"
 #include <sys/types.h>
 #include <pwd.h>
+#include <sys/wait.h>
 
 int yylex(void);
 int yyerror(char *s);
@@ -20,16 +21,29 @@ int runSetAlias(char *name, char *word);
 int runSetEnv(char* arg1, char* arg2);
 void runPrintAlias(void);
 int runUnalias(std::string name);
+//Command functions
+//void runNBCommand(char* arg);
+void printArgs();					//done
+void printNode();					//done
+void insertCommandNode();
+void computeCommand();
+void changeIOLocation(char* arg);	//done
+
+
+//Variables for Command
+bool fileIN_OUT = true;
+bool bg = false;
+extern comNode* nbcommand = new comNode();
+
 //struct aTable aliasTable;
 
 std::unordered_map<std::string,std::string> aliases;
-
 %}
 
 %union {char *string;}
-
+%type<string> arg_list argument excess_string cmd
 %start cmd_line
-%token <string> BYE CD STRING ALIAS UNALIAS END SETENV UNSETENV COMMAND
+%token <string> BYE CD STRING ALIAS UNALIAS END SETENV UNSETENV COMMAND OPTION OPTION2 IO IOR PIPE AMPERSAND
 
 %%
 cmd_line    :
@@ -41,9 +55,91 @@ cmd_line    :
 	| UNALIAS STRING END			{runUnalias($2); return 1;}
 	| SETENV STRING STRING END		{runSetEnv($2, $3); return 1;}
 	| UNSETENV STRING END			{return 1;}
-	| COMMAND END				{return 1;}
-	| COMMAND STRING END			{return 1;}
+	| simple_command			{return 1;}
+	| excess_string END			{printf("EXCESS_STRING: %s\n", $1); return 1;}
+	;
+excess_string:
+	STRING					{ strcpy($$, $1); }
+	| excess_string STRING			{ strcat($1, $2); }
+	;
+simple_command:
+	END						{ }
+	| cmd q1 q0			{ printf("command: %s\n", $1); } ;
+q0:
+	END						{}
+	| PIPE simple_command	{ computeCommand(); }
 
+q1:
+	option q2
+	| option option q2
+	| arg_list q3
+	| io_modifier q4
+	| background q5
+	| io_descr q3
+	| /*empty*/				{ insertCommandNode(); computeCommand(); };
+
+q2:
+	arg_list q3
+	| io_modifier q4
+	| io_descr q3
+	| background q5
+	| /*empty*/				{ insertCommandNode(); computeCommand(); };
+
+
+q3:
+	io_modifier q4
+	| io_descr q3
+	| background q5
+	| /*empty*/				{ insertCommandNode(); computeCommand(); };
+
+
+q4:
+	file q3;
+
+q5:
+	/*empty*/				{ insertCommandNode(); computeCommand(); };
+
+
+cmd:
+	COMMAND					{ $$ = $1; nbcommand->changeCom($1);};
+
+arg_list:
+	argument
+	| argument arg_list
+
+argument:
+	STRING		{ nbcommand->insertArg($1);}/*
+	| BYE		{ nbcommand->insertArg($1);}
+	| CD		{ nbcommand->insertArg($1);}
+	| ALIAS		{ nbcommand->insertArg($1);}
+	| UNALIAS	{ nbcommand->insertArg($1);}
+	| SETENV	{ nbcommand->insertArg($1);}
+	| UNSETENV	{ nbcommand->insertArg($1);}*/;
+
+file:
+	STRING		{ changeIOLocation($1);};
+
+io_modifier:
+	IO			{
+					if(strcmp($1, "<")==0){
+						fileIN_OUT = true;
+						nbcommand->changeInput($1);
+					}
+					else{
+						fileIN_OUT = false;
+						nbcommand->changeOutput($1);	//Need code for '>' vs ">>""
+					}
+				};
+
+io_descr:
+	IOR			{ nbcommand->changeStdError($1);};
+
+option:
+	OPTION		{ nbcommand->changeOp1($1); nbcommand->insertArg($1); }
+	| OPTION2	{ nbcommand->changeOp2($1); nbcommand->insertArg($1); };
+
+background:
+	AMPERSAND	{ bg = true;};
 %%
 
 int yyerror(char *s) {
@@ -56,6 +152,9 @@ int runCD_home(){
 	if(chdir(pw->pw_dir) == 0){
 		getcwd(cwd, sizeof(cwd));
 		strcpy(varTable.word[0], cwd);
+		myPaths.pop_back();
+		std::string temp(cwd);
+		myPaths.push_back(temp);
 	}
 	return 1;
 }
@@ -70,10 +169,13 @@ int runCD(char* arg) {
 			if (runCD_home())
 			{
 				//printf("SUCCESS\n");
-				std::string str(arg);
-				str = str.substr(2);
-				strcat(varTable.word[0], "/");
-				strcat(varTable.word[0], str.c_str());
+				if( strlen(arg) > 1 )
+				{
+					std::string str(arg);
+					str = str.substr(2);
+					strcat(varTable.word[0], "/");
+					strcat(varTable.word[0], str.c_str());
+				}
 			}
 		}
 		
@@ -86,11 +188,17 @@ int runCD(char* arg) {
 		if(chdir(varTable.word[0]) == 0) {
 			getcwd(cwd, sizeof(cwd));
 			strcpy(varTable.word[0], cwd);
+			myPaths.pop_back();
+			std::string temp(cwd);
+			myPaths.push_back(temp);
 			return 1;
 		}
 		else {
 			getcwd(cwd, sizeof(cwd));
 			strcpy(varTable.word[0], cwd);
+			myPaths.pop_back();
+			std::string temp(cwd);
+			myPaths.push_back(temp);
 			printf("Directory not found\n");
 			return 1;
 		}
@@ -98,6 +206,9 @@ int runCD(char* arg) {
 	else { // arg is absolute path
 		if(chdir(arg) == 0){
 			strcpy(varTable.word[0], arg);
+			myPaths.pop_back();
+			std::string temp(cwd);
+			myPaths.push_back(temp);
 			return 1;
 		}
 		else {
@@ -176,4 +287,134 @@ int runUnalias(std::string name)
 		}	
 	}
 	return 1;
+}
+
+//Needs to be edited
+/*
+void runNBCommand(char* arg)
+{
+	//No need to parse path of command
+	int size = myArguments.size();
+	int child = fork();
+
+	//Child
+	if(child==0){
+		char** args = convertArgs();
+		std::string temp(arg);
+		temp = temp.substr(temp.find_last_of("/")+1);
+		char* t;
+		strcpy(t, temp.c_str());
+		printf("t: [%s]\n", t);
+		args[0] = new char[sizeof(t)];
+		strcpy(args[0], t);
+		try{
+			execv(arg, args);
+		}
+		catch(...){
+			printf("Didn't work..\n");
+		}
+		exit;
+	}
+	//Parent
+	else if(child > 0){
+		if(size>0)
+			if(strcmp( myArguments[size-1], "&") != 0)
+				wait(NULL);
+	}
+/*
+	int child = fork();
+	//Parent
+	if (child>0){
+		//Check if last argument == &
+	printf("ERROR2\n");
+		if(size>2)
+		if(strcmp( myArguments[size-1], "&") != 0 ) // Source of error
+			wait(NULL);
+	}
+	else if (child == 0){
+		char* temp; strcpy(temp, "ls");
+		char* args[2] = {temp, NULL};
+		execv(arg, args);
+	}
+*/
+//}
+
+void printArgs()
+{
+	for (int i=0; i< nbcommand->numArgs+2;i++)
+	{
+		printf("\t[%s]", nbcommand->args[i]);
+	}
+	printf("\n");
+}
+
+void printNode(){
+	if(nbcommand != NULL){
+		printf("cmd: \t\t[%s]\n", nbcommand->cmd);
+		printf("op1: \t\t[%s]\n", nbcommand->op1);
+		printf("op2: \t\t[%s]\n", nbcommand->op2);
+		for(int i=0;i<nbcommand->numArgs+2;i++)
+			printf("arg[%d]: \t[%s]\n", i, nbcommand->args[i]);
+		printf("file_in: \t[%s]\n", nbcommand->file_in);
+		printf("file_out: \t[%s]\n", nbcommand->file_out);
+		printf("stdin: \t\t[%s]\n", nbcommand->stdin);
+		printf("stdout: \t[%s]\n", nbcommand->stdout);
+		printf("stderr: \t[%s]\n", nbcommand->stderr);
+		if(nbcommand->next == NULL)
+			printf("next: \t\t[NULL]\n");
+		else
+			printf("next: \t\t[nextCom]\n");
+	}
+	else
+		printf("nbcommand is NULL\n");
+}
+
+void insertCommandNode(){
+	comNode* newCom = new comNode();
+	comNode* backt;
+	comNode* temp = nbcommand;
+
+	while(temp->next != NULL){	
+		backt = temp;	
+		temp = temp->next;
+	}
+
+	temp->next == newCom;
+
+	printf("inserting node...\n\n");
+	printArgs();
+	printNode();
+}
+
+void computeCommand(){
+	//replace runNBCommand();
+	//run command
+	//if only 1 command		
+	printf("computing command..\n\n");
+	/*
+	if(nbcommand->next != NULL){
+		comNode* temp = nbcommand;
+		nbcommand = nbcommand->next;
+		free (temp);
+		
+	}
+	else{
+		free( nbcommand);
+		nbcommand = NULL;
+		nbcommand = new comNode();
+	}*/
+	printNode();
+}
+
+
+void changeIOLocation(char* arg){
+	//True - input file, False - output file
+	if(fileIN_OUT){
+		nbcommand->file_in = new char[sizeof(arg)+1];
+		strcpy(nbcommand->file_in, arg);
+	}
+	else{
+		nbcommand->file_out = new char[sizeof(arg)+1];
+		strcpy(nbcommand->file_out, arg);
+	}
 }

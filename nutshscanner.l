@@ -7,6 +7,8 @@
 #include "global.h"
 #include <dirent.h>
 struct aTable aliasTable;
+extern std::vector<std::string> myPaths;
+bool comInProgress = false;
 
 
 char* subAliases(char* name){
@@ -41,26 +43,71 @@ ANYCHAR            [)(*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(*&%$#@!`;,\.a-zA-Z0-9'/*_
 <string_condition>[\"]          {BEGIN(INITIAL);}
 
 [ \t]			{ }
-bye				{ return BYE; }
-cd				{ return CD; }
-alias			{ return ALIAS; }
-unalias			{ return UNALIAS; }
-setenv			{ return SETENV; }
-unsetenv		{ return UNSETENV;}
-~([/]{ANYCHAR}*)*                  { yylval.string = strdup(yytext); return STRING;}
-[a-z]+		{
-			char* yycopy = strdup( yytext);
-			if (commandExist(yytext)){
-				printf("COMMAND\n");
+bye				{ 
+                    yylval.string = strdup(yytext); 
+                    if(!comInProgress) {comInProgress = !comInProgress; return BYE;}
+                    else return STRING;
+                }
+cd				{ 
+                    yylval.string = strdup(yytext); 
+                    if(!comInProgress) {comInProgress = !comInProgress; return CD;}
+                    else return STRING;
+                }
+alias			{ 
+                    yylval.string = strdup(yytext); 
+                    if(!comInProgress) {comInProgress = !comInProgress; return ALIAS;}
+                    else return STRING;
+                }
+unalias			{ 
+                    yylval.string = strdup(yytext); 
+                    if(!comInProgress) {comInProgress = !comInProgress; return UNALIAS;}
+                    else return STRING;
+                }
+setenv			{ 
+                    yylval.string = strdup(yytext); 
+                    if(!comInProgress) {comInProgress = !comInProgress; return SETENV;}
+                    else return STRING;
+                }
+unsetenv		{ 
+                    yylval.string = strdup(yytext); 
+                    if(!comInProgress) {comInProgress = !comInProgress; return UNSETENV;}
+                    else return STRING;
+                }
+[~.]([/]{ANYCHAR}*)*                  { yylval.string = strdup(yytext); return STRING;}
+[a-zA-Z]+		{
+//			char* yycopy = strdup( yytext);
+			if (commandExist(yytext) && !comInProgress){
+                comInProgress = true;
 				return COMMAND;
-                    	}
-                    	else
+            }
+            else
+			{
+                yylval.string = strdup(yytext);
+				return STRING;
+			}
+		}
+"<"                   { yylval.string = strdup(yytext); return IO; }
+">"[>]?               { yylval.string = strdup(yytext); return IO; }
+"2>"(&1)?             { yylval.string = strdup(yytext); return IOR; }
+"|"                 { return PIPE; }
+"&"                 { return AMPERSAND; }
+-[a-zA-Z0-9]*       { yylval.string = strdup(yytext); return OPTION; }
+-[a-zA-Z=a-zA-Z]*   { yylval.string = strdup(yytext); return OPTION2;}
+[/]({ANYCHAR}*[/])*{ANYCHAR}+       {
+//            char* yycopy = strdup( yytext);
+            if (commandExist(yytext) && !comInProgress){
+                comInProgress = true;
+				return COMMAND;
+            }
+            else
 			{
 				yylval.string = strdup(yytext);
 				return STRING;
 			}
-		}
-"\n"                { return END; }
+        }
+\%\=\+\’\”\(\)\$\/\_\-\.\?\*\~a-zA-Z0-9]+   { yylval.string = strdup(yytext); return STRING; }
+"\n"                { comInProgress = false; return END; }
+;		            { comInProgress = false; return END; }
 [\"]                { BEGIN(string_condition); }
 {CHAR}+             { if(ifAlias(yytext)) {
                         //printf("yytext: %s\n", yytext);
@@ -75,29 +122,61 @@ unsetenv		{ return UNSETENV;}
                             return STRING;
                         };
                     }
+.                   { printf("last resort: %s\n", yytext); yylval.string = strdup(yytext); return STRING;}
 %%
-
 bool commandExist(char* name)
 {
-//Doesn't work at the moment
     DIR *dir;
     struct dirent *ent;
     bool found = false;
-    if ((dir = opendir ("/bin")) != NULL) {
-        /* compare all the files and directories within directory */
 
-        while ((ent = readdir (dir)) != NULL && !found) {
-            if( strcmp(ent->d_name, name) == 0 )
-            {
-                found = true;
-                printf ("%s\tFound!\n", name);
+    // path_to_command/command
+    if( name[0] == '/')
+    {
+        std::string str(name);
+        std::string path = str.substr(0, str.find_last_of("/"));
+        if ((dir = opendir (path.c_str())) != NULL) {
+            /* compare all the files and directories within directory */
+            std::string c_name = str.substr(str.find_last_of("/")+1);
+            while ((ent = readdir (dir)) != NULL && !found) {
+                if( strcmp(ent->d_name, c_name.c_str()) == 0 )
+                {
+                    found = true;
+                    printf ("Found! [%s]\n", name);
+					yylval.string = strdup(yytext);
+                }
             }
+            closedir (dir);
+        } else {
+            /* could not open directory */
+			printf("Couldn't open directory\n");
+            perror ("");
+        	//return EXIT_FAILURE;
         }
-        closedir (dir);
-    } else {
-        /* could not open directory */
-        perror ("");
-    return EXIT_FAILURE;
     }
+    else 
+	{
+		//Check all paths
+		std::string c(name);
+        int i=0;
+        while(i<myPaths.size() && !found){
+			c = name;
+			std::size_t f_pos = myPaths[i].find_last_of("/");
+			if(f_pos != myPaths[i].length() - 1 || f_pos == std::string::npos){
+				c = myPaths[i] + "/" + c;
+			}
+			else if (f_pos != std::string::npos)
+				c = myPaths[i] + c;
+			//printf("New c: [%s]\n", c.c_str());
+			char* temp = new char[c.length()+1];
+			strcpy(temp, c.c_str());
+			found = commandExist(temp);
+			if(found){
+				yylval.string = strdup(c.c_str());
+				break;
+			}
+            i++;
+		}
+	}
     return found;
 }

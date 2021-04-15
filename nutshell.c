@@ -6,13 +6,16 @@
 #include <string.h>
 #include "global.h"
 #include <unistd.h>
+#include <cstddef>
 
 extern char *getcwd(char *buf, size_t size);
 int yyparse();
 int aliasIndex, varIndex;
 char cwd[PATH_MAX];
 struct evTable varTable;
-
+std::vector<std::string> myPaths;
+void parsePaths(const char* path);
+void clearPaths();
 
 int main()
 {
@@ -31,7 +34,13 @@ int main()
     strcpy(varTable.word[varIndex], "nutshell");
     varIndex++;
     strcpy(varTable.var[varIndex], "PATH");
-    strcpy(varTable.word[varIndex], ".:/bin");
+    const char* path = getenv("PATH");
+    strcpy(varTable.word[varIndex], path);
+    parsePaths(path);
+    if(1){
+    	std::string temp(cwd);
+	    myPaths.push_back(temp);
+    }
     varIndex++;
 
 
@@ -45,5 +54,36 @@ int main()
         yyparse();
     }
 
+    //Freeing memory
+    clearPaths();
    return 0;
+}
+
+void parsePaths(const char* path){
+	std::string str(path);
+	std::string new_s;
+	std::size_t found = str.find_first_of(":");
+	int i = 0;
+
+	//check if first character
+	//Find and separate all words
+	while(found != std::string::npos){
+		if(found == 0){
+			str = str.substr(found+1);
+			found = str.find_first_of(":");
+		}
+		//printf( "%d: %s\n", i, str.substr(0, found).c_str());
+		myPaths.push_back(str.substr(0,found).c_str());
+		i++;
+		str = str.substr(found+1);
+		found = str.find_first_of(":");
+	}
+	//printf("%d: %s\n", i, str.c_str());
+	myPaths.push_back(str.c_str());
+}
+
+void clearPaths(){
+	int size = myPaths.size();
+	for (int i=0;i<size;i++)
+		myPaths.pop_back();
 }
