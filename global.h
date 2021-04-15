@@ -31,8 +31,12 @@ extern std::unordered_map<std::string,std::string> variables;
 
 extern std::unordered_map<std::string, std::vector<char*>> commands;
 
+extern std::vector<std::string> myPaths;
 
 extern bool unaliasCheck;
 
 extern bool runAlias;
+
+extern bool cd;
+
 

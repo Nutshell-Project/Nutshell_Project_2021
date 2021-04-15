@@ -21,9 +21,12 @@ void runPrintEnv(void);
 void runPrintAlias(void);
 int runUnalias(std::string name);
 int runCommand(char* name);
+void parseNewPath(const char* path);
+
 //struct aTable aliasTable;
 bool unaliasCheck;
 bool runAlias;
+bool cd;
 std::vector<char*> currentArgs;
 
 
@@ -78,7 +81,7 @@ int runCD_home(){
 }
 
 int runCD(char* arg) {
-
+	cd = false;
 	if (arg[0] != '/') { // arg is relative path
 		//Check if first char is '~'
 		if(arg[0] == '~')
@@ -87,10 +90,13 @@ int runCD(char* arg) {
 			if (runCD_home())
 			{
 				//printf("SUCCESS\n");
-				std::string str(arg);
-				str = str.substr(2);
-				strcat(varTable.word[0], "/");
-				strcat(varTable.word[0], str.c_str());
+				if( strlen(arg) > 1 )
+				{
+					std::string str(arg);
+					str = str.substr(2);
+					strcat(varTable.word[0], "/");
+					strcat(varTable.word[0], str.c_str());
+				}
 			}
 		}
 		
@@ -103,11 +109,19 @@ int runCD(char* arg) {
 		if(chdir(varTable.word[0]) == 0) {
 			getcwd(cwd, sizeof(cwd));
 			strcpy(varTable.word[0], cwd);
+			myPaths.pop_back();
+			std::string temp(cwd);
+			myPaths.push_back(temp);
 			return 1;
 		}
 		else {
 			getcwd(cwd, sizeof(cwd));
 			strcpy(varTable.word[0], cwd);
+			myPaths.pop_back();
+			std::string temp(cwd);
+			myPaths.push_back(temp);
+			printf("WHAT!!!1");
+
 			printf("Directory not found\n");
 			return 1;
 		}
@@ -115,9 +129,13 @@ int runCD(char* arg) {
 	else { // arg is absolute path
 		if(chdir(arg) == 0){
 			strcpy(varTable.word[0], arg);
+			myPaths.pop_back();
+			std::string temp(cwd);
+			myPaths.push_back(temp);
 			return 1;
 		}
 		else {
+			printf("WHAT!!!2");
 			printf("Directory not found\n");
 			return 1;
 		}
@@ -157,8 +175,13 @@ int runSetAlias(char *name, char *word) {
 
 int runSetEnv(char* arg1, char* arg2)
 {
+	if ( strcmp(arg1, "PATH") == 0 )
+	{
+		parseNewPath(arg2);
+	}
 	runAlias = false;
 	variables[arg1] = arg2;
+
 	
 	return 1;
 }
@@ -261,32 +284,96 @@ void runPrintEnv(void)
 int runCommand(char* name)
 {
 
-	//  std::string str = std::string(name);
+	auto vec = commands[name];
+	int size;
+	if (vec.size() == 0)
+		size = 2;
+	else
+		size = vec.size() + 1;
+
+	std::cout << "VEC SIZE: " << vec.size() << std::endl;
+	char* args[size]; 
+	std::vector<char*> aliasVector;
+	int counter = 0;
+	std::string str = std::string(name);
     // std::string substr = str.substr(0, str.find(' '));
     // char* s = const_cast<char*>(substr.c_str());
 
-	const char* path = "/bin/";
-	char* catPath = (char*)malloc(1 + strlen(path) + strlen(name));
-	strcpy(catPath, path);
-	strcat(catPath, name);
+	size_t pos = 0;
+	std::string delimiter = " ";
+	std::string token = str.substr(0, pos);
+	std::cout << "STR: " << str << std::endl;
 
-	std::cout << catPath << std::endl;
-	
-
-	// char* arg[3] = {"HELLLOOO", NULL};
-	std::cout << "WORKED: " << name << std::endl;
-	auto vec = commands[name];
-	int size = vec.size() + 1;
-	char* args[size]; 
-	args[0] = name;
-
-	for (int i = 1; i < size; i++)
+	while ((pos = str.find(delimiter)) != std::string::npos) 
 	{
-		std::cout << "ARG: " << vec[i - 1] << std::endl; 
-		args[i] = vec[i - 1];
+		std::cout << "HERE" << std::endl;
+		token = str.substr(0, pos);
+		args[counter] = const_cast<char*>(token.c_str());
+		std::cout << "TOKEN: " << token << std::endl;
+		aliasVector.push_back(const_cast<char*>(token.c_str()));
+		str.erase(0, pos + delimiter.length());
+		counter++;
+		
 	}
+	aliasVector.push_back(const_cast<char*>(str.c_str()));
+	std::cout << "TOKEN: " << str << std::endl;
+
+
+
+	const char* path = "/bin/";
+	if (counter == 0)
+		token = str;	
+	char* catPath = (char*)malloc(1 + strlen(path) + strlen(const_cast<char*>(token.c_str())));
+	strcpy(catPath, path);
+	strcat(catPath, const_cast<char*>(token.c_str()));
+
+	std::cout << "CATPATH:" << catPath << std::endl;
+	
+	args[0] = const_cast<char*>(token.c_str());
+
+	std::cout << "COUNTER: " << counter << std::endl;
+	std::cout << "SIZE: " << size << std::endl;
+
+	if (vec.size() == 0 && counter != 0)
+	{
+		for (int i = counter; i < size; i++)
+		{
+			std::cout << "HERE1" << std::endl; 
+		
+			std::cout << "ARG: " << aliasVector[i] << std::endl; 
+			args[i] = aliasVector[i];
+		}
+
+	}
+	else
+	{
+		if (vec.size() != 0)
+		{
+			for (int i = 1; i < size; i++)
+			{
+				std::cout << "HERE2" << std::endl;
+				std::cout << "ARG: " << vec[i - 1] << std::endl; 
+				args[i] = vec[i - 1];
+			}
+
+		}
+		else
+		{
+			size--;
+		}
+		
+	}
+
 	args[size] = NULL;
 	
+
+
+
+	for (int i = 0; i < size; i++)
+	{
+		std::cout << args[i] << std::endl;
+	}
+
 
 	pid_t pid = fork();
 	int status;
@@ -325,6 +412,35 @@ int runCommand(char* name)
 
 
 	free(catPath);
+	str = std::string(name);
+
+	aliasVector.clear();
+	commands.erase(str);
 
 	return 1;
+}
+
+void parseNewPath(const char* path)
+{
+	std::cout << "HERE WE ARE" << std::endl;
+	std::string str(path);
+	std::string new_s;
+	std::size_t found = str.find_first_of(":");
+	int i = 0;
+
+	//check if first character
+	//Find and separate all words
+	while(found != std::string::npos){
+		if(found == 0){
+			str = str.substr(found+1);
+			found = str.find_first_of(":");
+		}
+		//printf( "%d: %s\n", i, str.substr(0, found).c_str());
+		myPaths.push_back(str.substr(0,found).c_str());
+		i++;
+		str = str.substr(found+1);
+		found = str.find_first_of(":");
+	}
+	//printf("%d: %s\n", i, str.c_str());
+	myPaths.push_back(str.c_str());
 }

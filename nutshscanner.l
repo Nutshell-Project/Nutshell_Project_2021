@@ -13,12 +13,12 @@ struct aTable aliasTable;
 int yylex(void);
 extern std::unordered_map<std::string,std::string> aliases;
 extern std::unordered_map<std::string,std::string> variables;
+extern std::vector<std::string> myPaths;
 
 //extern int aliasCheck = 0;
 //extern bool unaliasCheck;
 extern bool runAlias;
-bool quotes;
-
+// bool cd;
 
 
 char* subAliases(char* name){
@@ -143,11 +143,11 @@ ANYCHAR            [)(*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(*&%$#@!`;,\.a-zA-Z0-9'/*_
 <string_condition>[\}]       { BEGIN(INITIAL);} 
 
 
-
+<<EOF>>         {exit(0);}
 [\$\{]+          {  printf("YAY"); BEGIN(string_condition); } 
 [ \t]			{ }
 bye				{ return BYE; }
-cd				{ return CD; }
+cd				{ cd = true; return CD; }
 alias			{ runAlias = true; return ALIAS; }
 unalias			{ runAlias = true; unaliasCheck = true; return UNALIAS; }
 setenv			{ runAlias = true; return SETENV; }
@@ -160,10 +160,16 @@ printenv        { return PRINTENV; }
                 //std::cout << runAlias << std::endl;
                 if (!runAlias)
                 {
-                    if ( commandExist(yytext) )
+
+                    std::string str = std::string(yytext);
+                    std::string substr = str.substr(0, str.find(' '));
+                    yycopy = const_cast<char*>(substr.c_str());
+                    std::cout << "YYCOPY1: " << yycopy << std::endl;
+
+                    if ( commandExist(yycopy) && cd != true)
                     {
 				        printf("COMMAND\n");
-                        yylval.string = strdup(yytext);
+                        yylval.string = strdup(yycopy);
 				        return COMMAND;
                     }
                 }
@@ -184,20 +190,39 @@ printenv        { return PRINTENV; }
                     printf("IS AN ALIAS\n");
                     //source: https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html
                     char *yycopy = strdup( subAliases(yytext) );
-                    std::cout << runAlias << std::endl;
+                    std::cout << yycopy << std::endl;
+                    std::cout << "STRCMP:" << strcmp(yycopy, yytext) << std::endl;
+
                     
                     if (!runAlias)
                     {
-                        if ( commandExist(const_cast<char*>(aliases[yycopy].c_str())))
+                        std::string str = std::string(aliases[yycopy].c_str());
+                        std::string substr = str.substr(0, str.find(' '));
+                        char* temp = const_cast<char*>(substr.c_str());
+                        std::cout << "YYCOPY2: " << yycopy << std::endl;
+                        std::cout << "STR: " << str << std::endl;
+
+
+                        if ( commandExist(temp) && cd != true) //const_cast<char*>(aliases[temp].c_str())
                         {
                             //printf("COMMANDDIF\n");
-                            std::cout << "YYTEXT: " << yytext << std::endl;
-                            yylval.string = strdup(const_cast<char*>(aliases[yycopy].c_str()));
+                            std::cout << "YYTEXT: " << std::endl;
+                            yylval.string = strdup(str.c_str());
                             return COMMAND;
                         }
+
+                        if ( strcmp(yycopy, yytext) == 0 ) // so we don't run subAliases again if there no more nested aliases
+                        {
+                            printf("EHLLO\n");
+
+                            yylval.string = strdup(yytext);
+                            return STRING;
+                        }
                     }
-                    else if (strcmp(yycopy, yytext) == 0) // so we don't freaaaaaaking run subAliases again if there no more nested aliases
+                    else if ( strcmp(yycopy, yytext) == 0 ) // so we don't run subAliases again if there no more nested aliases
                     {
+                        printf("EHLLO\n");
+
                         yylval.string = strdup(yytext);
                         return STRING;
                     }
@@ -250,30 +275,59 @@ printenv        { return PRINTENV; }
 
 bool commandExist(char* name)
 {
-    std::string str = std::string(name);
-    std::string substr = str.substr(0, str.find(' '));
-    char* s = const_cast<char*>(substr.c_str()); // don't ask why i'm doing it this way, i don't even know
-
-//Doesn't work at the moment
     DIR *dir;
     struct dirent *ent;
     bool found = false;
-    if ((dir = opendir ("/bin")) != NULL) {
-        /* compare all the files and directories within directory */
 
-        while ((ent = readdir (dir)) != NULL && !found) {
-            if( strcmp(ent->d_name, s) == 0 )
-            {
-                found = true;
-                printf ("%s\tFound!\n", s);
+    // std::cout << "COMMAND NAME: "<< name << std::endl;
+
+    // path_to_command/command
+    if( name[0] == '/')
+    {
+        std::string str(name);
+        std::string path = str.substr(0, str.find_last_of("/"));
+        if ((dir = opendir (path.c_str())) != NULL) {
+            /* compare all the files and directories within directory */
+            std::string c_name = str.substr(str.find_last_of("/")+1);
+            while ((ent = readdir (dir)) != NULL && !found) {
+                if( strcmp(ent->d_name, c_name.c_str()) == 0 )
+                {
+                    found = true;
+                    printf ("Found! [%s]\n", name);
+					yylval.string = strdup(yytext);
+                }
             }
+            closedir (dir);
+        } else {
+            /* could not open directory */
+			printf("Couldn't open directory\n");
+            perror ("");
+        	//return EXIT_FAILURE;
         }
-        closedir (dir);
-    } else {
-        /* could not open directory */
-        perror ("");
-    return EXIT_FAILURE;
     }
+    else 
+	{
+		//Check all paths
+		std::string c(name);
+        int i=0;
+        while(i<myPaths.size() && !found){
+			c = name;
+			std::size_t f_pos = myPaths[i].find_last_of("/");
+			if(f_pos != myPaths[i].length() - 1 || f_pos == std::string::npos){
+				c = myPaths[i] + "/" + c;
+			}
+			else if (f_pos != std::string::npos)
+				c = myPaths[i] + c;
+			//printf("New c: [%s]\n", c.c_str());
+			char* temp = new char[c.length()+1];
+			strcpy(temp, c.c_str());
+			found = commandExist(temp);
+			if(found){
+				yylval.string = strdup(c.c_str());
+				break;
+			}
+            i++;
+		}
+	}
     return found;
 }
-
