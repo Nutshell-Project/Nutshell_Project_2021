@@ -12,6 +12,9 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <glob.h>
 
 int yylex(void);
 int yyerror(char *s);
@@ -379,10 +382,32 @@ void computeCommand(){
 	//compute nbcommand here
 	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\tcomputing command..\n\n");
 	if( nbcommand->cmd != NULL){
-		pid_t pid = fork();
 		int status;
+		pid_t pid = fork();
 		if(pid == 0){
 			//Child
+			// if command in pipeline has input redirection
+			if (nbcommand->stdin != NULL){
+				if ( strcmp(nbcommand->stdin, "<") == 0 ) { 
+					FILE *fdin = fopen(nbcommand->file_in, "a+");
+					dup2(fileno(fdin), STDIN_FILENO);
+					fclose(fdin);
+				}
+			}
+			// if command in pipeline has output redirection
+			if (nbcommand->stdout != NULL){
+				int fdout;
+				if ( strcmp(nbcommand->stdout, ">") == 0 ) {
+					FILE *fdout = fopen(nbcommand->file_out, "w");
+					dup2(fileno(fdout), STDOUT_FILENO);
+					fclose(fdout);
+				}
+				else if ( strcmp(nbcommand->stdout, ">>") == 0 ) {
+					FILE *fdout = fopen(nbcommand->file_out, "a");
+					dup2(fileno(fdout), STDOUT_FILENO);
+					fclose(fdout);
+				}
+			}
 			if(execv(nbcommand->cmd, nbcommand->args) == -1)
 				printf("Doesn't work...\n");
 			_exit(0);
