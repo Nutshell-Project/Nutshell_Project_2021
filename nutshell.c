@@ -12,6 +12,8 @@ int yyparse();
 int aliasIndex, varIndex;
 char cwd[PATH_MAX];
 struct evTable varTable;
+extern std::unordered_map<std::string,std::string> variables;
+
 
 
 int main()
@@ -34,7 +36,13 @@ int main()
     strcpy(varTable.word[varIndex], ".:/bin");
     varIndex++;
 
+    variables["'HOME'"] = cwd;
+    variables["'PATH'"] = ".:/bin";
 
+    // char buffer[100];
+    // fgets(buffer, 100 , stdin);
+    // printf("Read: %s", buffer);
+    // return 0;
 
     system("clear");
     while(1)

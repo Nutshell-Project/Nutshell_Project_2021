@@ -1,6 +1,7 @@
 #include "stdbool.h"
 #include <limits.h>
 #include <unordered_map>
+#include <vector>
 
 
 struct evTable {
@@ -27,4 +28,11 @@ char* subAliases(char* name);
 extern std::unordered_map<std::string,std::string> aliases;
 
 extern std::unordered_map<std::string,std::string> variables;
+
+extern std::unordered_map<std::string, std::vector<char*>> commands;
+
+
+extern bool unaliasCheck;
+
+extern bool runAlias;
 
