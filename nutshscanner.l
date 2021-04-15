@@ -6,6 +6,7 @@
 #include <string.h>
 #include "global.h"
 #include <dirent.h>
+#include <errno.h>
 struct aTable aliasTable;
 extern std::vector<std::string> myPaths;
 bool comInProgress = false;
@@ -36,6 +37,7 @@ bool commandExist(char* name);
 
 CHAR            [.A-Za-z0-9!\/_-][.A-Za-z0-9!\/_-]*
 ANYCHAR            [)(*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -]*
+F_DName         [a-zA-Z0-9\}\{\[\]\)\(\^&'@,$=!-#%.+~_]+
 
 %%
 
@@ -73,39 +75,29 @@ unsetenv		{
                     if(!comInProgress) {comInProgress = !comInProgress; return UNSETENV;}
                     else return STRING;
                 }
-[~.]([/]{ANYCHAR}*)*                  { yylval.string = strdup(yytext); return STRING;}
+[~.]?([/]{F_DName}*)*    {
+			                if (!comInProgress){ if(commandExist(yytext)) { comInProgress = true; return COMMAND; }
+                            }
+                            else { yylval.string = strdup(yytext); return STRING;}
+                        }
+[/]({F_DName}+[/])*{F_DName}+       {
+			                if (!comInProgress){ if(commandExist(yytext)) { comInProgress = true; return COMMAND; }
+                            }
+                            else { yylval.string = strdup(yytext); return STRING;}
+                        }
 [a-zA-Z]+		{
-//			char* yycopy = strdup( yytext);
-			if (commandExist(yytext) && !comInProgress){
-                comInProgress = true;
-				return COMMAND;
-            }
-            else
-			{
-                yylval.string = strdup(yytext);
-				return STRING;
-			}
-		}
+                    yylval.string = strdup(yytext);
+			        if (commandExist(yytext) && !comInProgress){ comInProgress = true; return COMMAND; }
+                    else return STRING;
+        		}
 "<"                   { yylval.string = strdup(yytext); return IO; }
 ">"[>]?               { yylval.string = strdup(yytext); return IO; }
 "2>"(&1)?             { yylval.string = strdup(yytext); return IOR; }
-"|"                 { return PIPE; }
+"|"                 { comInProgress = false; return PIPE; }
 "&"                 { return AMPERSAND; }
--[a-zA-Z0-9]*       { yylval.string = strdup(yytext); return OPTION; }
--[a-zA-Z=a-zA-Z]*   { yylval.string = strdup(yytext); return OPTION2;}
-[/]({ANYCHAR}*[/])*{ANYCHAR}+       {
-//            char* yycopy = strdup( yytext);
-            if (commandExist(yytext) && !comInProgress){
-                comInProgress = true;
-				return COMMAND;
-            }
-            else
-			{
-				yylval.string = strdup(yytext);
-				return STRING;
-			}
-        }
-\%\=\+\’\”\(\)\$\/\_\-\.\?\*\~a-zA-Z0-9]+   { yylval.string = strdup(yytext); return STRING; }
+-[a-zA-Z0-9]*       { yylval.string = strdup(yytext); return STRING; }
+-[a-zA-Z=a-zA-Z]*   { yylval.string = strdup(yytext); return STRING; }
+
 "\n"                { comInProgress = false; return END; }
 ;		            { comInProgress = false; return END; }
 [\"]                { BEGIN(string_condition); }
@@ -150,7 +142,7 @@ bool commandExist(char* name)
         } else {
             /* could not open directory */
 			printf("Couldn't open directory\n");
-            perror ("");
+            printf("Error: [%s]\n", strerror(errno));
         	//return EXIT_FAILURE;
         }
     }

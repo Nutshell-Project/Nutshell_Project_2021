@@ -24,7 +24,7 @@ int runUnalias(std::string name);
 //Command functions
 //void runNBCommand(char* arg);
 void printArgs();					//done
-void printNode();					//done
+void printNode(comNode* nbcommand);	//done
 void insertCommandNode();
 void computeCommand();
 void changeIOLocation(char* arg);	//done
@@ -33,7 +33,8 @@ void changeIOLocation(char* arg);	//done
 //Variables for Command
 bool fileIN_OUT = true;
 bool bg = false;
-extern comNode* nbcommand = new comNode();
+extern comNode* nbcommand= new comNode();
+int depth = 1;
 
 //struct aTable aliasTable;
 
@@ -41,9 +42,9 @@ std::unordered_map<std::string,std::string> aliases;
 %}
 
 %union {char *string;}
-%type<string> arg_list argument excess_string cmd
+%type<string> arg_list argument excess_string simple_command cmd q0
 %start cmd_line
-%token <string> BYE CD STRING ALIAS UNALIAS END SETENV UNSETENV COMMAND OPTION OPTION2 IO IOR PIPE AMPERSAND
+%token <string> BYE CD STRING ALIAS UNALIAS END SETENV UNSETENV COMMAND IO IOR PIPE AMPERSAND
 
 %%
 cmd_line    :
@@ -64,27 +65,17 @@ excess_string:
 	;
 simple_command:
 	END						{ }
-	| cmd q1 q0			{ printf("command: %s\n", $1); } ;
+	| cmd q1 q0			{ $$ = $1; printf("command: [%s]\t[%s]\n", $1, $3); } ;
 q0:
-	END						{}
-	| PIPE simple_command	{ computeCommand(); }
+	END						{ }
+	| PIPE simple_command	{ $$ = $2; computeCommand();} //Add code to account for PIPE and depth
 
 q1:
-	option q2
-	| option option q2
-	| arg_list q3
-	| io_modifier q4
-	| background q5
-	| io_descr q3
-	| /*empty*/				{ insertCommandNode(); computeCommand(); };
-
-q2:
 	arg_list q3
 	| io_modifier q4
-	| io_descr q3
 	| background q5
-	| /*empty*/				{ insertCommandNode(); computeCommand(); };
-
+	| io_descr q3
+	| /*empty*/				{ insertCommandNode(); computeCommand(); }; //handle logic
 
 q3:
 	io_modifier q4
@@ -101,20 +92,14 @@ q5:
 
 
 cmd:
-	COMMAND					{ $$ = $1; nbcommand->changeCom($1);};
+	COMMAND					{ $$ = $1; nbcommand->changeCom($1); };
 
 arg_list:
 	argument
 	| argument arg_list
 
 argument:
-	STRING		{ nbcommand->insertArg($1);}/*
-	| BYE		{ nbcommand->insertArg($1);}
-	| CD		{ nbcommand->insertArg($1);}
-	| ALIAS		{ nbcommand->insertArg($1);}
-	| UNALIAS	{ nbcommand->insertArg($1);}
-	| SETENV	{ nbcommand->insertArg($1);}
-	| UNSETENV	{ nbcommand->insertArg($1);}*/;
+	STRING		{ nbcommand->insertArg($1);}
 
 file:
 	STRING		{ changeIOLocation($1);};
@@ -133,10 +118,6 @@ io_modifier:
 
 io_descr:
 	IOR			{ nbcommand->changeStdError($1);};
-
-option:
-	OPTION		{ nbcommand->changeOp1($1); nbcommand->insertArg($1); }
-	| OPTION2	{ nbcommand->changeOp2($1); nbcommand->insertArg($1); };
 
 background:
 	AMPERSAND	{ bg = true;};
@@ -173,8 +154,10 @@ int runCD(char* arg) {
 				{
 					std::string str(arg);
 					str = str.substr(2);
+					char* temp = new char[str.length()+1];
+					strcpy(temp, str.c_str());
 					strcat(varTable.word[0], "/");
-					strcat(varTable.word[0], str.c_str());
+					strcat(varTable.word[0], temp);
 				}
 			}
 		}
@@ -302,7 +285,7 @@ void runNBCommand(char* arg)
 		char** args = convertArgs();
 		std::string temp(arg);
 		temp = temp.substr(temp.find_last_of("/")+1);
-		char* t;
+		char* t = new char[temp.length()+1];
 		strcpy(t, temp.c_str());
 		printf("t: [%s]\n", t);
 		args[0] = new char[sizeof(t)];
@@ -332,7 +315,7 @@ void runNBCommand(char* arg)
 			wait(NULL);
 	}
 	else if (child == 0){
-		char* temp; strcpy(temp, "ls");
+		char* temp = new char[sizeof("ls")+1]; strcpy(temp, "ls");
 		char* args[2] = {temp, NULL};
 		execv(arg, args);
 	}
@@ -342,24 +325,31 @@ void runNBCommand(char* arg)
 void printArgs()
 {
 	for (int i=0; i< nbcommand->numArgs+2;i++)
-	{
-		printf("\t[%s]", nbcommand->args[i]);
+	{	
+		if(nbcommand->args[i] != NULL)
+			printf("\t[%s]", nbcommand->args[i]);
+		else
+			printf("\t[NULL]");
 	}
 	printf("\n");
 }
 
-void printNode(){
+void printNode(comNode* nbcommand){
 	if(nbcommand != NULL){
-		printf("cmd: \t\t[%s]\n", nbcommand->cmd);
-		printf("op1: \t\t[%s]\n", nbcommand->op1);
-		printf("op2: \t\t[%s]\n", nbcommand->op2);
+		if(nbcommand->cmd != NULL) printf("cmd: \t\t[%s]\n", nbcommand->cmd);
+		else	printf("cmd: \t\t[NULL]\n");
 		for(int i=0;i<nbcommand->numArgs+2;i++)
 			printf("arg[%d]: \t[%s]\n", i, nbcommand->args[i]);
-		printf("file_in: \t[%s]\n", nbcommand->file_in);
-		printf("file_out: \t[%s]\n", nbcommand->file_out);
-		printf("stdin: \t\t[%s]\n", nbcommand->stdin);
-		printf("stdout: \t[%s]\n", nbcommand->stdout);
-		printf("stderr: \t[%s]\n", nbcommand->stderr);
+		if(nbcommand->file_in != NULL) printf("file_in: \t[%s]\n", nbcommand->file_in);
+		else	printf("file_in: \t[NULL]\n");
+		if(nbcommand->file_out != NULL) printf("file_out: \t[%s]\n", nbcommand->file_out);
+		else	printf("file_out: \t[NULL]\n");
+		if(nbcommand->stdin != NULL) printf("stdin: \t\t[%s]\n", nbcommand->stdin);
+		else	printf("stdin: \t\t[NULL]\n");
+		if(nbcommand->stdout != NULL) printf("stdout: \t[%s]\n", nbcommand->stdout);
+		else	printf("stdout: \t[NULL]\n");
+		if(nbcommand->stderr != NULL) printf("stderr: \t[%s]\n", nbcommand->stderr);
+		else	printf("stderr: \t[NULL]\n");
 		if(nbcommand->next == NULL)
 			printf("next: \t\t[NULL]\n");
 		else
@@ -371,39 +361,51 @@ void printNode(){
 
 void insertCommandNode(){
 	comNode* newCom = new comNode();
-	comNode* backt;
 	comNode* temp = nbcommand;
-
+	printNode(newCom);
 	while(temp->next != NULL){	
-		backt = temp;	
 		temp = temp->next;
 	}
 
-	temp->next == newCom;
-
-	printf("inserting node...\n\n");
+	temp->next = newCom;
+	printf("######################################\tinserting node...\n\n");
+	depth++;
 	printArgs();
-	printNode();
+	printNode(nbcommand);
 }
 
 void computeCommand(){
 	//replace runNBCommand();
-	//run command
-	//if only 1 command		
-	printf("computing command..\n\n");
-	/*
-	if(nbcommand->next != NULL){
-		comNode* temp = nbcommand;
-		nbcommand = nbcommand->next;
-		free (temp);
-		
+	//compute nbcommand here
+	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\tcomputing command..\n\n");
+	if( nbcommand->cmd != NULL){
+		pid_t pid = fork();
+		int status;
+		if(pid == 0){
+			//Child
+			if(execv(nbcommand->cmd, nbcommand->args) == -1)
+				printf("Doesn't work...\n");
+			_exit(0);
+		}
+		else if (pid > 0){
+			//Child
+			if(!bg)
+				waitpid(pid, &status, 0);
+		}
+		else if (pid < 0){
+			perror("In fork():");
+		}
+		else{
+			printf("Weelll....\n");
+		}
 	}
-	else{
-		free( nbcommand);
-		nbcommand = NULL;
-		nbcommand = new comNode();
-	}*/
-	printNode();
+	//remove node
+	//nbcommand->reset();
+	nbcommand = nbcommand->next;
+	depth--;
+	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+	printNode(nbcommand);
+	bg = false;
 }
 
 

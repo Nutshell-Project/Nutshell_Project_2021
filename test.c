@@ -9,6 +9,10 @@
 #include <cstddef>
 #include <string>
 
+
+
+
+
 std::vector <std::string> myPaths;
 
 void parsePaths(const char* path);

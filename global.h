@@ -34,7 +34,7 @@ extern std::vector<std::string> myPaths;
 extern bool comInProgress;
 
 struct comNode{
-	char* cmd; char* op1; char* op2;
+	char* cmd;
 	int numArgs;
 	char** args;
 	char* file_in; char* file_out;
@@ -42,15 +42,17 @@ struct comNode{
 	comNode* next;
 
 	comNode(){
-		cmd = NULL; op1 = NULL; op2 = NULL; numArgs = 0; args = new char*[numArgs+2]; file_in = NULL; file_out = NULL; stdin = NULL; stdout = NULL; stderr = NULL; next = NULL;
+		cmd = NULL; numArgs = 0; args = new char*[numArgs+2]; args[0] = NULL; args[1] = NULL; file_in = NULL; file_out = NULL; stdin = NULL; stdout = NULL; stderr = NULL; next = NULL;
 	};
 	void changeCom(char* newcmd){
+		std::string c(newcmd);
+		std::string c_name = c.substr(c.find_last_of("/")+1);
 		cmd = new char[sizeof(newcmd)+1];
 		strcpy(cmd, newcmd);
 		if (args[0] != NULL)
 			free(args[0]);
-		args[0] = new char[sizeof(newcmd)+1];
-		strcpy(args[0], newcmd);
+		args[0] = new char[c_name.length()+1];
+		strcpy(args[0], c_name.c_str());
 	};
 	void insertArg(char* arg){
 		numArgs++;
@@ -63,6 +65,7 @@ struct comNode{
 		strcpy(newArgs[numArgs], arg);
 		free (args);
 		args = newArgs;
+		args[numArgs+1] = NULL;
 	};
 	void changeInput(char* input){
 		stdin = new char[sizeof(input)+1];
@@ -76,12 +79,17 @@ struct comNode{
 		stderr = new char[sizeof(error)+1];
 		strcpy(stderr, error);
 	};
-	void changeOp1(char*option){
-		op1 = new char[sizeof(option)+1];
-		strcpy(op1, option);
-	};
-	void changeOp2(char*option){
-		op2 = new char[sizeof(option)+1];
-		strcpy(op2, option);
-	};
+	void reset(){
+		free(cmd);
+		cmd = NULL;
+		numArgs = 2;
+		char** newArgs = new char*[numArgs+2];
+		for(int i=0;i<numArgs;i++){
+			newArgs[i] = NULL;
+		}
+		free(args);
+		args = newArgs;
+		free(file_in); free(file_out); free(stdin); free(stdout); free(stderr); free(next);
+		file_in = NULL; file_out = NULL; stdin = NULL; stdout = NULL; stderr = NULL; next = NULL;
+	}
 };
