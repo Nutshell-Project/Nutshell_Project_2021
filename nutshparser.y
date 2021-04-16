@@ -1,7 +1,4 @@
 %{
-// This is ONLY a demo micro-shell whose purpose is to illustrate the need for and how to handle nested alias substitutions and how to use Flex start conditions.
-// This is to help students learn these specific capabilities, the code is by far not a complete nutshell by any means.
-// Only "alias name word", "cd word", and "bye" run.
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -22,43 +19,56 @@ int runCD_home();
 int runCD(char* arg);
 int runSetAlias(char *name, char *word);
 int runSetEnv(char* arg1, char* arg2);
+int runUnSetenv(std::string name);
+void runPrintEnv(void);
 void runPrintAlias(void);
 int runUnalias(std::string name);
 //Command functions
-//void runNBCommand(char* arg);
-void printArgs();					//done
-void printNode(comNode* nbcommand);	//done
+void printArgs();					
+void printNode(comNode* nbcommand);	
 void insertCommandNode();
 void computeCommand();
-void changeIOLocation(char* arg);	//done
-
-
+void changeIOLocation(char* arg);	
 //Variables for Command
 bool fileIN_OUT = true;
 bool bg = false;
 extern comNode* nbcommand= new comNode();
 bool isPipe = false;
+//////////////////////////////
+//int runCommand(char* name);
+//void parseNewPath(const char* path);
 
 //struct aTable aliasTable;
+bool unaliasCheck;
+bool runAlias;
+bool cd;
+std::vector<char*> currentArgs;
+
 
 std::unordered_map<std::string,std::string> aliases;
+
+std::unordered_map<std::string,std::string> variables;
+
+//std::unordered_map<std::string, std::vector<char*>> commands;
+
 %}
 
 %union {char *string;}
 %type<string> arg_list argument excess_string simple_command cmd q0
 %start cmd_line
-%token <string> BYE CD STRING ALIAS UNALIAS END SETENV UNSETENV COMMAND IO IOR PIPE AMPERSAND
+%token <string> BYE CD STRING ALIAS UNALIAS END SETENV UNSETENV PRINTENV COMMAND IO IOR PIPE AMPERSAND
 
 %%
 cmd_line    :
-	BYE END					{exit(1); return 1;}
-	| CD END				{runCD_home(); return 1;}
+	BYE END						{exit(1); return 1;}
+	| CD END					{runCD_home(); return 1;}
 	| CD STRING END				{runCD($2); return 1;}
 	| ALIAS STRING STRING END		{runSetAlias($2, $3); return 1;}
 	| ALIAS END				{runPrintAlias(); return 1;}
 	| UNALIAS STRING END			{runUnalias($2); return 1;}
 	| SETENV STRING STRING END		{runSetEnv($2, $3); return 1;}
-	| UNSETENV STRING END			{return 1;}
+	| UNSETENV STRING END		{return runUnSetenv($2);}
+  | PRINTENV END				{runPrintEnv(); return 1;}
 	| simple_command			{return 1;}
 	| excess_string END			{printf("EXCESS_STRING: %s\n", $1); return 1;}
 	;
@@ -85,7 +95,6 @@ q3:
 	| io_descr q3
 	| background q5
 	| /*empty*/				{ insertCommandNode(); computeCommand(); };
-
 
 q4:
 	file q3;
@@ -147,7 +156,7 @@ int runCD_home(){
 }
 
 int runCD(char* arg) {
-
+	cd = false;
 	if (arg[0] != '/') { // arg is relative path
 		//Check if first char is '~'
 		if(arg[0] == '~')
@@ -188,6 +197,9 @@ int runCD(char* arg) {
 			myPaths.pop_back();
 			std::string temp(cwd);
 			myPaths.push_back(temp);
+      
+			//printf("WHAT!!!1");
+
 			printf("Directory not found\n");
 			return 1;
 		}
@@ -201,6 +213,7 @@ int runCD(char* arg) {
 			return 1;
 		}
 		else {
+			printf("WHAT!!!2");
 			printf("Directory not found\n");
 			return 1;
 		}
@@ -208,38 +221,54 @@ int runCD(char* arg) {
 }
 
 int runSetAlias(char *name, char *word) {
-	// for (int i = 0; i < aliasIndex; i++) {
-	//	if(strcmp(name, word) == 0){
-	//		printf("Error, expansion of \"%s\" would create a loop.\n", name);
-	//		return 1;
-	//	}
-	//	else if((strcmp(aliasTable.name[i], name) == 0) && (strcmp(aliasTable.word[i], word) == 0)){
-	//		printf("Error, expansion of \"%s\" would create a loop.\n", name);
-	//		return 1;
-	//	}
-	//	else if(strcmp(aliasTable.name[i], name) == 0) {
-	//		strcpy(aliasTable.word[i], word);
-	//		return 1;
-	//	}
+	//for (int i = 0; i < aliasIndex; i++) {
+	runAlias = false;
+    std::cout << "SHOULD BE FALSE: " << runAlias << std::endl;
+
+
+	std::cout << "NAME: " << name << " WORD: " << word << std::endl;
+	if(strcmp(name, word) == 0){
+		printf("Error, expansion of \"%s\" would create a loop1.\n", name);
+		return 1;
+	}
+	else if( aliases.find(word) != aliases.end() ){
+		if( strcmp(aliases[word].c_str(), name) == 0 )
+		{
+			printf("Error, expansion of \"%s\" would create a loop2.\n", name);
+			return 1;
+		}
+	}
+	// else if(strcmp(aliasTable.name[i], name) == 0) {
+	// 	//strcpy(aliasTable.word[i], word);
+	// 	printf("HERE");
+	// 	return 1;
 	// }
+	//}
 	//strcpy(aliasTable.name[aliasIndex], name);
 	//strcpy(aliasTable.word[aliasIndex], word);
 	aliases[name] = word;	
 	aliasIndex++;
-
 	return 1;
 }
 
 int runSetEnv(char* arg1, char* arg2)
 {
-	//printf("PRINTENV WORKS FOR NOW\n");
-	//printf("s", arg1);
+	if ( strcmp(arg1, "PATH") == 0 )
+	{
+		parseNewPath(arg2);
+	}
+	runAlias = false;
+	variables[arg1] = arg2;
 
+	
 	return 1;
 }
 
 void runPrintAlias(void)
 {
+	runAlias = false;
+
+	
 	if (aliasIndex == 0)
 	{
 		printf("%s", "No aliases set\n");
@@ -257,14 +286,52 @@ void runPrintAlias(void)
 
 int runUnalias(std::string name)
 {
+	runAlias = false;
+	//std::cout << "UNALIAS" << std::endl;
 	//std::cout << name << std::endl;
 	for (auto& it : aliases)
 	{
-		//std::cout << it.first << " " << it.second << std::endl;
-		if (it.first.compare(name) == 0)
-		{
 
-			aliases.erase(name);
+		std::cout << it.first << " " << it.second << " " << name << std::endl;
+		if (it.first.compare(name) == 0) // for some reason it's it.second 
+		{
+			aliases.erase(it.first); // again some reason it's it.first; you would think name would == it.first but no; subAliases is weird
+			std::cout << "ERASED ALIAS" << std::endl;
+			aliasIndex--;
+			return 1;
+		}
+		else
+		{
+			//std::cout << "Alias does not exist!" << std::endl;
+			//return 1;
+		}	
+	}
+	return 1;
+}
+
+int runUnSetenv(std::string name)
+{
+
+	if (name.compare("PATH") == 0)
+	{
+		std::cout << "CAN'T UNSET PATH" << std::endl;
+		return 1;
+	}
+	else if (name.compare("HOME") == 0)
+	{
+		std::cout << "CAN'T UNSET HOME" << std::endl;
+		return 1;
+	}
+		
+	//unaliasCheck = true;
+	//std::cout << name << std::endl;
+	for (auto& it : variables)
+	{
+
+		//std::cout << it.first << " " << it.second << " " << name << std::endl;
+		if (it.first.compare(name) == 0) // for some reason it's it.second 
+		{
+			variables.erase(name); // again some reason it's it.first; you would think name would == it.first but no; subAliases is weird
 			//std::cout << "ERASED ALIAS" << std::endl;
 			aliasIndex--;
 			return 1;
@@ -387,7 +454,6 @@ void computeCommand(){
 	bg = false;
 }
 
-
 void changeIOLocation(char* arg){
 	//True - input file, False - output file
 	if(fileIN_OUT){
@@ -397,5 +463,18 @@ void changeIOLocation(char* arg){
 	else{
 		nbcommand->file_out = new char[sizeof(arg)+1];
 		strcpy(nbcommand->file_out, arg);
+	}
+}
+
+void runPrintEnv(void)
+{
+
+	// for (int i = 0; i < aliasIndex; i++)
+	// {
+	//	printf("Alias name: %s; Alias word: %s\n", aliasTable.name[i], aliasTable.word[i]);
+	// }
+	for (auto& it : variables)
+	{
+		std::cout << it.first << "=" << it.second << std::endl; 
 	}
 }

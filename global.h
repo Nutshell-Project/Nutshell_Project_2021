@@ -93,3 +93,9 @@ struct comNode{
 		file_in = NULL; file_out = NULL; stdin = NULL; stdout = NULL; stderr = NULL; next = NULL;
 	}
 };
+
+extern bool unaliasCheck;
+
+extern bool runAlias;
+
+extern bool cd;
