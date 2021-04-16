@@ -38,10 +38,10 @@ int main()
     const char* path = getenv("PATH");
     strcpy(varTable.word[varIndex], path);
     parsePaths(path);
-    if(1){
-    	std::string temp(cwd);
-	    myPaths.push_back(temp);
-    }
+    // if(1){
+    // 	std::string temp(cwd);
+	//     myPaths.push_back(temp);
+    // }
     varIndex++;
 
     
@@ -90,3 +90,5 @@ void clearPaths(){
 	for (int i=0;i<size;i++)
 		myPaths.pop_back();
 }
+
+
