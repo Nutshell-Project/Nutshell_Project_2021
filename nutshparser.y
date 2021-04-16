@@ -37,7 +37,7 @@ void changeIOLocation(char* arg);	//done
 bool fileIN_OUT = true;
 bool bg = false;
 extern comNode* nbcommand= new comNode();
-int depth = 1;
+bool isPipe = false;
 
 //struct aTable aliasTable;
 
@@ -68,10 +68,10 @@ excess_string:
 	;
 simple_command:
 	END						{ }
-	| cmd q1 q0			{ $$ = $1; printf("command: [%s]\t[%s]\n", $1, $3); } ;
+	| cmd q1 q0			{ $$ = $1;}; //printf("command: [%s]\t[%s]\n", $1, $3); 
 q0:
 	END						{ }
-	| PIPE simple_command	{ $$ = $2; computeCommand();} //Add code to account for PIPE and depth
+	| pipe simple_command	{ $$ = $2; computeCommand();} //Add code to account for PIPE and depth
 
 q1:
 	arg_list q3
@@ -124,6 +124,9 @@ io_descr:
 
 background:
 	AMPERSAND	{ bg = true;};
+
+pipe:
+	PIPE		{ isPipe = true; };		//for computeCommand
 %%
 
 int yyerror(char *s) {
@@ -275,56 +278,7 @@ int runUnalias(std::string name)
 	return 1;
 }
 
-//Needs to be edited
-/*
-void runNBCommand(char* arg)
-{
-	//No need to parse path of command
-	int size = myArguments.size();
-	int child = fork();
-
-	//Child
-	if(child==0){
-		char** args = convertArgs();
-		std::string temp(arg);
-		temp = temp.substr(temp.find_last_of("/")+1);
-		char* t = new char[temp.length()+1];
-		strcpy(t, temp.c_str());
-		printf("t: [%s]\n", t);
-		args[0] = new char[sizeof(t)];
-		strcpy(args[0], t);
-		try{
-			execv(arg, args);
-		}
-		catch(...){
-			printf("Didn't work..\n");
-		}
-		exit;
-	}
-	//Parent
-	else if(child > 0){
-		if(size>0)
-			if(strcmp( myArguments[size-1], "&") != 0)
-				wait(NULL);
-	}
-/*
-	int child = fork();
-	//Parent
-	if (child>0){
-		//Check if last argument == &
-	printf("ERROR2\n");
-		if(size>2)
-		if(strcmp( myArguments[size-1], "&") != 0 ) // Source of error
-			wait(NULL);
-	}
-	else if (child == 0){
-		char* temp = new char[sizeof("ls")+1]; strcpy(temp, "ls");
-		char* args[2] = {temp, NULL};
-		execv(arg, args);
-	}
-*/
-//}
-
+//For testing only
 void printArgs()
 {
 	for (int i=0; i< nbcommand->numArgs+2;i++)
@@ -337,6 +291,7 @@ void printArgs()
 	printf("\n");
 }
 
+//For testing only
 void printNode(comNode* nbcommand){
 	if(nbcommand != NULL){
 		if(nbcommand->cmd != NULL) printf("cmd: \t\t[%s]\n", nbcommand->cmd);
@@ -365,22 +320,21 @@ void printNode(comNode* nbcommand){
 void insertCommandNode(){
 	comNode* newCom = new comNode();
 	comNode* temp = nbcommand;
-	printNode(newCom);
+	//printNode(newCom);
 	while(temp->next != NULL){	
 		temp = temp->next;
 	}
 
 	temp->next = newCom;
-	printf("######################################\tinserting node...\n\n");
-	depth++;
-	printArgs();
-	printNode(nbcommand);
+	//printf("######################################\tinserting node...\n\n");
+	//printArgs();
+	//printNode(nbcommand);
 }
 
 void computeCommand(){
 	//replace runNBCommand();
 	//compute nbcommand here
-	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\tcomputing command..\n\n");
+	//printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\tcomputing command..\n\n");
 	if( nbcommand->cmd != NULL){
 		int status;
 		pid_t pid = fork();
@@ -427,9 +381,9 @@ void computeCommand(){
 	//remove node
 	//nbcommand->reset();
 	nbcommand = nbcommand->next;
-	depth--;
-	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-	printNode(nbcommand);
+	isPipe = false;
+	//printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+	//printNode(nbcommand);
 	bg = false;
 }
 

@@ -87,12 +87,14 @@ unsetenv		{
                         }
 [a-zA-Z]+		{
                     yylval.string = strdup(yytext);
-			        if (commandExist(yytext) && !comInProgress){ comInProgress = true; return COMMAND; }
+                    if (!comInProgress){
+                        if (commandExist(yytext)){ comInProgress = true; return COMMAND; }
+                    }
                     else return STRING;
         		}
-"<"                   { yylval.string = strdup(yytext); return IO; }
-">"[>]?               { yylval.string = strdup(yytext); return IO; }
-"2>"(&1)?             { yylval.string = strdup(yytext); return IOR; }
+"<"                 { yylval.string = strdup(yytext); return IO; }
+">"[>]?             { yylval.string = strdup(yytext); return IO; }
+"2>"(&1)?           { yylval.string = strdup(yytext); return IOR; }
 "|"                 { comInProgress = false; return PIPE; }
 "&"                 { return AMPERSAND; }
 -[a-zA-Z0-9]*       { yylval.string = strdup(yytext); return STRING; }
@@ -134,7 +136,7 @@ bool commandExist(char* name)
                 if( strcmp(ent->d_name, c_name.c_str()) == 0 )
                 {
                     found = true;
-                    printf ("Found! [%s]\n", name);
+                    //printf ("Found! [%s]\n", name);
 					yylval.string = strdup(yytext);
                 }
             }
