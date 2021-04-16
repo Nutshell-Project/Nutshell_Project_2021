@@ -6,10 +6,7 @@
 #include <string.h>
 #include "global.h"
 #include <dirent.h>
-#include <errno.h>
 struct aTable aliasTable;
-extern std::vector<std::string> myPaths;
-bool comInProgress = false;
 
 
 char* subAliases(char* name){
@@ -37,7 +34,6 @@ bool commandExist(char* name);
 
 CHAR            [.A-Za-z0-9!\/_-][.A-Za-z0-9!\/_-]*
 ANYCHAR            [)(*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -]*
-F_DName         [a-zA-Z0-9\}\{\[\]\)\(\^&'@,$=!-#%.+~_]+
 
 %%
 
@@ -51,30 +47,31 @@ bye				{
                     else return STRING;
                 }
 cd				{ 
-                    yylval.string = strdup(yytext); 
+                    yylval.string = strdup(yytext); cd = true;
                     if(!comInProgress) {comInProgress = !comInProgress; return CD;}
                     else return STRING;
                 }
 alias			{ 
-                    yylval.string = strdup(yytext); 
+                    yylval.string = strdup(yytext); runAlias = true;
                     if(!comInProgress) {comInProgress = !comInProgress; return ALIAS;}
                     else return STRING;
                 }
 unalias			{ 
-                    yylval.string = strdup(yytext); 
+                    yylval.string = strdup(yytext); runAlias = true; unaliasCheck = true;
                     if(!comInProgress) {comInProgress = !comInProgress; return UNALIAS;}
                     else return STRING;
                 }
 setenv			{ 
-                    yylval.string = strdup(yytext); 
+                    yylval.string = strdup(yytext); runAlias = true;
                     if(!comInProgress) {comInProgress = !comInProgress; return SETENV;}
                     else return STRING;
                 }
 unsetenv		{ 
-                    yylval.string = strdup(yytext); 
+                    yylval.string = strdup(yytext);
                     if(!comInProgress) {comInProgress = !comInProgress; return UNSETENV;}
                     else return STRING;
                 }
+printenv        { return PRINTENV; }
 [~.]?([/]{F_DName}*)*    {
 			                if (!comInProgress){ if(commandExist(yytext)) { comInProgress = true; return COMMAND; }
                             }
@@ -86,17 +83,106 @@ unsetenv		{
                             else { yylval.string = strdup(yytext); return STRING;}
                         }
 [a-zA-Z]+		{
-                    yylval.string = strdup(yytext);
-                    if (!comInProgress){
-                        if (commandExist(yytext)){ comInProgress = true; return COMMAND; }
+                //std::cout << "YYTEXT: " << yytext << std::endl;
+                char* yycopy = strdup( yytext );
+                //std::cout << runAlias << std::endl;
+                if (!runAlias)
+                {
+
+                    std::string str = std::string(yytext);
+                    std::string substr = str.substr(0, str.find(' '));
+                    yycopy = const_cast<char*>(substr.c_str());
+                    std::cout << "YYCOPY1: " << yycopy << std::endl;
+
+                    if ( commandExist(yycopy) && cd != true)
+                    {
+				        printf("COMMAND\n");
+                        yylval.string = strdup(yycopy); comInProgress = true;
+				        return COMMAND;
                     }
-                    else return STRING;
+                }
+                    
+                
+                else if (unaliasCheck)
+                {
+                    std::cout << "UNALIASCHECK" << std::endl;
+                    unaliasCheck = false;
+                    yylval.string = strdup(yytext);
+                    return STRING;
+                }
+            //         	else
+			// {
+                if(ifAlias(yytext)) 
+                {
+                    //printf("yytext1: %s\n", yytext);
+                    printf("IS AN ALIAS\n");
+                    //source: https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html
+                    char *yycopy = strdup( subAliases(yytext) );
+                    std::cout << yycopy << std::endl;
+                    std::cout << "STRCMP:" << strcmp(yycopy, yytext) << std::endl;
+
+                    
+                    if (!runAlias)
+                    {
+                        std::string str = std::string(aliases[yycopy].c_str());
+                        std::string substr = str.substr(0, str.find(' '));
+                        char* temp = const_cast<char*>(substr.c_str());
+                        std::cout << "YYCOPY2: " << yycopy << std::endl;
+                        std::cout << "STR: " << str << std::endl;
+
+
+                        if ( commandExist(temp) && cd != true) //const_cast<char*>(aliases[temp].c_str())
+                        {
+                            //printf("COMMANDDIF\n");
+                            std::cout << "YYTEXT: " << std::endl;
+                            yylval.string = strdup(str.c_str());
+                            return COMMAND;
+                        }
+
+                        if ( strcmp(yycopy, yytext) == 0 ) // so we don't run subAliases again if there no more nested aliases
+                        {
+                            printf("EHLLO\n");
+
+                            yylval.string = strdup(yytext);
+                            return STRING;
+                        }
+                    }
+                    else if ( strcmp(yycopy, yytext) == 0 ) // so we don't run subAliases again if there no more nested aliases
+                    {
+                        printf("EHLLO\n");
+
+                        yylval.string = strdup(yytext);
+                        return STRING;
+                    }
+
+                    for ( int i = strlen(subAliases(yytext)) - 1; i >= 0; --i )
+                    {
+                        unput( yycopy[i] );
+                        //std::cout << "YYCOPY[I]: " << yycopy[i] << std::endl;
+                    }
+
+                    free( yycopy );
+
+                    } 
+                    else 
+                    {
+                        //printf("yytext2: %s\n", yytext);
+                        yylval.string = strdup(yytext);
+                        return STRING;
+                    };
+				//yylval.string = strdup(yytext);
+                //printf("GOES HERE INSTEAD\n");
+                
+				//return STRING;
+			
+			//}
+		}
         		}
-"<"                 { yylval.string = strdup(yytext); return IO; }
-">"[>]?             { yylval.string = strdup(yytext); return IO; }
-"2>"(&1)?           { yylval.string = strdup(yytext); return IOR; }
-"|"                 { comInProgress = false; return PIPE; }
-"&"                 { return AMPERSAND; }
+"<"                 { yylval.string = strdup(yytext); if (cd || runAlias || unaliasCheck) { return STRING; } else { return IO; } }
+">"[>]?             { yylval.string = strdup(yytext); if (cd || runAlias || unaliasCheck) { return STRING; } else { return IO; } }
+"2>"(&1)?           { yylval.string = strdup(yytext); if (cd || runAlias || unaliasCheck) { return STRING; } else { return IOR; } }
+"|"                 { if (cd || runAlias || unaliasCheck) { return STRING; } else { comInProgress = false; return PIPE; } }
+"&"                 { if (cd || runAlias || unaliasCheck) { return STRING; } else { return AMPERSAND; } }
 -[a-zA-Z0-9]*       { yylval.string = strdup(yytext); return STRING; }
 -[a-zA-Z=a-zA-Z]*   { yylval.string = strdup(yytext); return STRING; }
 
@@ -118,11 +204,14 @@ unsetenv		{
                     }
 .                   { printf("last resort: %s\n", yytext); yylval.string = strdup(yytext); return STRING;}
 %%
+
 bool commandExist(char* name)
 {
     DIR *dir;
     struct dirent *ent;
     bool found = false;
+
+    // std::cout << "COMMAND NAME: "<< name << std::endl;
 
     // path_to_command/command
     if( name[0] == '/')
@@ -137,6 +226,7 @@ bool commandExist(char* name)
                 {
                     found = true;
                     //printf ("Found! [%s]\n", name);
+
 					yylval.string = strdup(yytext);
                 }
             }

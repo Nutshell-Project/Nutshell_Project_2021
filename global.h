@@ -2,7 +2,7 @@
 #include <limits.h>
 #include <unordered_map>
 #include <vector>
-#include <string>
+
 
 struct evTable {
    char var[128][100];
@@ -29,7 +29,7 @@ extern std::unordered_map<std::string,std::string> aliases;
 
 extern std::unordered_map<std::string,std::string> variables;
 
-extern std::vector<std::string> myPaths;
+extern std::unordered_map<std::string, std::vector<char*>> commands;
 
 extern bool comInProgress;
 
@@ -93,3 +93,11 @@ struct comNode{
 		file_in = NULL; file_out = NULL; stdin = NULL; stdout = NULL; stderr = NULL; next = NULL;
 	}
 };
+
+extern std::vector<std::string> myPaths;
+
+extern bool unaliasCheck;
+
+extern bool runAlias;
+
+extern bool cd;
