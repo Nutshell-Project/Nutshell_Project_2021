@@ -1,4 +1,3 @@
-
 // This is ONLY a demo micro-shell whose purpose is to illustrate the need for and how to handle nested alias substitutions and how to use Flex start conditions.
 // This is to help students learn these specific capabilities, the code is by far not a complete nutshell by any means.
 // Only "alias name word", "cd word", and "bye" run.
@@ -44,9 +43,7 @@ int main()
     }
     varIndex++;
 
-    
-    variables["HOME"] = cwd;
-    variables["PATH"] = ".:/bin";
+
 
     system("clear");
     while(1)
